@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   materialize:
-    if: ${{ hashFiles('koraput-digital-business-ecosystem.zip') != '' && hashFiles('app/**', 'src/**', 'pages/**') == '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -18,7 +17,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Detect archive
+        id: archive
+        shell: bash
+        run: |
+          if [ -f koraput-digital-business-ecosystem.zip ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Extract application
+        if: steps.archive.outputs.present == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -43,6 +53,7 @@ jobs:
           rm -f koraput-digital-business-ecosystem.zip
 
       - name: Commit materialized source
+        if: steps.archive.outputs.present == 'true'
         shell: bash
         run: |
           set -euo pipefail
