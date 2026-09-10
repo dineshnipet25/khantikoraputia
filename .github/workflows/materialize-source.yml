@@ -1,4 +1,4 @@
-name: Materialize application source
+name: Materialize and harden application
 
 on:
   push:
@@ -12,53 +12,62 @@ jobs:
   materialize:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Detect archive
-        id: archive
-        shell: bash
-        run: |
-          if [ -f koraput-digital-business-ecosystem.zip ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Extract application
-        if: steps.archive.outputs.present == 'true'
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Extract source archive
         shell: bash
         run: |
           set -euo pipefail
+          test -f koraput-digital-business-ecosystem.zip
           rm -rf .materialized
           mkdir .materialized
           unzip -q koraput-digital-business-ecosystem.zip -d .materialized
-
-          # Archives commonly contain either the project files directly or one top-level folder.
           if [ -f .materialized/package.json ]; then
             cp -a .materialized/. .
           else
             candidates=(.materialized/*/package.json)
-            if [ ${#candidates[@]} -eq 0 ] || [ ! -f "${candidates[0]}" ]; then
-              echo 'ERROR: ZIP does not contain a discoverable Node project (package.json).'
-              find .materialized -maxdepth 3 -type f | sort | head -200
-              exit 1
-            fi
+            test ${#candidates[@]} -gt 0
             project_dir="${candidates[0]%/package.json}"
             cp -a "$project_dir"/. .
           fi
-          rm -rf .materialized
-          rm -f koraput-digital-business-ecosystem.zip
-
-      - name: Commit materialized source
-        if: steps.archive.outputs.present == 'true'
+      - name: Apply production hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/production-hardening/package.json package.json
+          cp .github/production-hardening/next.config.ts next.config.ts
+          cp .github/production-hardening/src/lib/auth.ts src/lib/auth.ts
+          cp .github/production-hardening/src/db/schema.ts src/db/schema.ts
+          cp .github/production-hardening/src/db/index.ts src/db/index.ts
+          cp .github/production-hardening/src/app/api/platform/route.ts src/app/api/platform/route.ts
+          cp .github/production-hardening/src/app/api/uploads/route.ts src/app/api/uploads/route.ts
+          cp .github/production-hardening/src/app/api/uploads/[id]/route.ts src/app/api/uploads/[id]/route.ts
+          mkdir -p src/app/privacy src/app/terms
+          cp .github/production-hardening/src/app/privacy/page.tsx src/app/privacy/page.tsx
+          cp .github/production-hardening/src/app/terms/page.tsx src/app/terms/page.tsx
+          cp .github/production-hardening/src/app/robots.ts src/app/robots.ts
+          cp .github/production-hardening/src/app/sitemap.ts src/app/sitemap.ts
+      - name: Create reproducible lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Remove source archive
+        run: rm -f koraput-digital-business-ecosystem.zip
+      - name: Verify application source exists
+        run: |
+          test -f package.json
+          test -f package-lock.json
+          test -f src/app/page.tsx
+          test -f src/db/schema.ts
+      - name: Commit materialized production source
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git commit -m 'Materialize application source from project archive' || exit 0
+          git commit -m 'Materialize and harden production application' || exit 0
           git push
