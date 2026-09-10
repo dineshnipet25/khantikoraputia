@@ -15,15 +15,20 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Detect source archive
+        id: archive
+        shell: bash
+        run: echo "present=$([ -f koraput-digital-business-ecosystem.zip ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
       - name: Set up Node
+        if: steps.archive.outputs.present == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Extract source archive
+        if: steps.archive.outputs.present == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          test -f koraput-digital-business-ecosystem.zip
           rm -rf .materialized
           mkdir .materialized
           unzip -q koraput-digital-business-ecosystem.zip -d .materialized
@@ -36,6 +41,7 @@ jobs:
             cp -a "$project_dir"/. .
           fi
       - name: Apply production hardening
+        if: steps.archive.outputs.present == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -53,16 +59,20 @@ jobs:
           cp .github/production-hardening/src/app/robots.ts src/app/robots.ts
           cp .github/production-hardening/src/app/sitemap.ts src/app/sitemap.ts
       - name: Create reproducible lockfile
+        if: steps.archive.outputs.present == 'true'
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Remove source archive
+        if: steps.archive.outputs.present == 'true'
         run: rm -f koraput-digital-business-ecosystem.zip
       - name: Verify application source exists
+        if: steps.archive.outputs.present == 'true'
         run: |
           test -f package.json
           test -f package-lock.json
           test -f src/app/page.tsx
           test -f src/db/schema.ts
       - name: Commit materialized production source
+        if: steps.archive.outputs.present == 'true'
         shell: bash
         run: |
           set -euo pipefail
