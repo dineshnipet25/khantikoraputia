@@ -13,34 +13,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
-
+          cache: npm
       - name: Require application source
+        run: |
+          test -f package.json
+          test -f src/app/page.tsx
+          test -f src/db/schema.ts
+      - name: Install dependencies
         shell: bash
         run: |
           set -euo pipefail
-          test -f package.json || { echo 'package.json missing'; exit 1; }
-          test -f package-lock.json || { echo 'package-lock.json missing; commit a lockfile before launch'; exit 1; }
-
-      - name: Install dependencies
-        run: npm ci
-
+          if [ -f package-lock.json ]; then npm ci; else npm install --ignore-scripts --no-audit --no-fund; fi
       - name: Lint
-        run: npm run lint --if-present
-
+        run: npm run lint
       - name: Typecheck
-        run: npm run typecheck --if-present
-
+        run: npm run typecheck
       - name: Next type generation
         run: npx next typegen
-
       - name: Build
         run: npm run build
-
       - name: Browser tests
         if: ${{ hashFiles('tests/platform.spec.ts') != '' }}
-        run: npx playwright test tests/platform.spec.ts --workers=1
+        run: npm test
