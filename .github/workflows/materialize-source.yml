@@ -1,0 +1,53 @@
+name: Materialize application source
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: ${{ hashFiles('koraput-digital-business-ecosystem.zip') != '' && hashFiles('app/**', 'src/**', 'pages/**') == '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract application
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .materialized
+          mkdir .materialized
+          unzip -q koraput-digital-business-ecosystem.zip -d .materialized
+
+          # Archives commonly contain either the project files directly or one top-level folder.
+          if [ -f .materialized/package.json ]; then
+            cp -a .materialized/. .
+          else
+            candidates=(.materialized/*/package.json)
+            if [ ${#candidates[@]} -eq 0 ] || [ ! -f "${candidates[0]}" ]; then
+              echo 'ERROR: ZIP does not contain a discoverable Node project (package.json).'
+              find .materialized -maxdepth 3 -type f | sort | head -200
+              exit 1
+            fi
+            project_dir="${candidates[0]%/package.json}"
+            cp -a "$project_dir"/. .
+          fi
+          rm -rf .materialized
+          rm -f koraput-digital-business-ecosystem.zip
+
+      - name: Commit materialized source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Materialize application source from project archive' || exit 0
+          git push
